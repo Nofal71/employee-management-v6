@@ -17,35 +17,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ArrowLeft, Users, FolderOpen, Plus, Save } from "lucide-react"
-import { hasPermission, PERMISSIONS } from "@/lib/permissions"
+import { ArrowLeft, Users, FolderOpen, Plus, Save, Trash2 } from "lucide-react"
+import { hasPermission, PERMISSIONS, canManageTeam } from "@/lib/permissions"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { ErrorMessage } from "@/components/ui/error-message"
 import { useToast } from "@/hooks/use-toast"
+
+interface TeamMember {
+  user: {
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+    role: {
+      name: string
+    }
+  }
+}
+
+interface TeamProject {
+  project: {
+    id: string
+    name: string
+    description: string | null
+    isActive: boolean
+  }
+}
 
 interface TeamDetail {
   id: string
   name: string
   description: string | null
   createdAt: string
-  members: Array<{
-    user: {
-      id: string
-      firstName: string
-      lastName: string
-      email: string
-      role: {
-        name: string
-      }
-    }
-  }>
-  teamProjects: Array<{
-    project: {
-      id: string
-      name: string
-      description: string | null
-      isActive: boolean
-    }
-  }>
+  members: TeamMember[]
+  teamProjects: TeamProject[]
 }
 
 interface User {
@@ -75,44 +80,42 @@ export default function TeamDetailPage() {
   const [allUsers, setAllUsers] = useState<User[]>([])
   const [allProjects, setAllProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [showMembersDialog, setShowMembersDialog] = useState(false)
   const [showProjectsDialog, setShowProjectsDialog] = useState(false)
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
 
-  const canManageTeams = hasPermission(session?.user.permissions || [], PERMISSIONS.MANAGE_TEAMS)
-  const canManageAssignedTeams = hasPermission(session?.user.permissions || [], PERMISSIONS.MANAGE_ASSIGNED_TEAMS)
+  const teamId = Array.isArray(params.id) ? params.id[0] : params.id
+
+  const canManageTeams = hasPermission(session?.user?.permissions || [], PERMISSIONS.MANAGE_TEAMS)
+  const canManageAssignedTeams = hasPermission(session?.user?.permissions || [], PERMISSIONS.MANAGE_ASSIGNED_TEAMS)
 
   useEffect(() => {
-    if (params.id) {
+    if (teamId && session?.user) {
       fetchTeamDetail()
       if (canManageTeams || canManageAssignedTeams) {
         fetchAllUsers()
         fetchAllProjects()
       }
     }
-  }, [params.id, canManageTeams, canManageAssignedTeams])
+  }, [teamId, session, canManageTeams, canManageAssignedTeams])
 
   const fetchTeamDetail = async () => {
     try {
-      const response = await fetch(`/api/teams/${params.id}`)
+      setError("")
+      const response = await fetch(`/api/teams/${teamId}`)
       if (response.ok) {
         const data = await response.json()
         setTeam(data)
       } else {
-        toast({
-          title: "Error",
-          description: "Failed to fetch team details",
-          variant: "destructive",
-        })
+        const errorData = await response.json()
+        setError(errorData.error || "Failed to fetch team details")
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Something went wrong",
-        variant: "destructive",
-      })
+      console.error("Failed to fetch team:", error)
+      setError("Something went wrong while fetching team details")
     } finally {
       setLoading(false)
     }
@@ -123,7 +126,7 @@ export default function TeamDetailPage() {
       const response = await fetch("/api/users")
       if (response.ok) {
         const data = await response.json()
-        setAllUsers(data.filter((u: User) => u.isActive))
+        setAllUsers((data.users || data || []).filter((u: User) => u.isActive))
       }
     } catch (error) {
       console.error("Failed to fetch users:", error)
@@ -135,7 +138,7 @@ export default function TeamDetailPage() {
       const response = await fetch("/api/projects")
       if (response.ok) {
         const data = await response.json()
-        setAllProjects(data.filter((p: Project) => p.isActive))
+        setAllProjects((data || []).filter((p: Project) => p.isActive))
       }
     } catch (error) {
       console.error("Failed to fetch projects:", error)
@@ -143,19 +146,21 @@ export default function TeamDetailPage() {
   }
 
   const openMembersDialog = () => {
-    setSelectedMembers(team?.members.map((m) => m.user.id) || [])
+    setSelectedMembers(team?.members?.map((m) => m.user.id) || [])
     setShowMembersDialog(true)
   }
 
   const openProjectsDialog = () => {
-    setSelectedProjects(team?.teamProjects.map((tp) => tp.project.id) || [])
+    setSelectedProjects(team?.teamProjects?.map((tp) => tp.project.id) || [])
     setShowProjectsDialog(true)
   }
 
   const updateTeamMembers = async () => {
+    if (!teamId) return
+
     setSubmitting(true)
     try {
-      const response = await fetch(`/api/teams/${params.id}/members`, {
+      const response = await fetch(`/api/teams/${teamId}/members`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userIds: selectedMembers }),
@@ -169,13 +174,15 @@ export default function TeamDetailPage() {
         setShowMembersDialog(false)
         fetchTeamDetail()
       } else {
+        const errorData = await response.json()
         toast({
           title: "Error",
-          description: "Failed to update team members",
+          description: errorData.error || "Failed to update team members",
           variant: "destructive",
         })
       }
     } catch (error) {
+      console.error("Failed to update members:", error)
       toast({
         title: "Error",
         description: "Something went wrong",
@@ -187,9 +194,11 @@ export default function TeamDetailPage() {
   }
 
   const updateTeamProjects = async () => {
+    if (!teamId) return
+
     setSubmitting(true)
     try {
-      const response = await fetch(`/api/teams/${params.id}/projects`, {
+      const response = await fetch(`/api/teams/${teamId}/projects`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectIds: selectedProjects }),
@@ -203,13 +212,15 @@ export default function TeamDetailPage() {
         setShowProjectsDialog(false)
         fetchTeamDetail()
       } else {
+        const errorData = await response.json()
         toast({
           title: "Error",
-          description: "Failed to update team projects",
+          description: errorData.error || "Failed to update team projects",
           variant: "destructive",
         })
       }
     } catch (error) {
+      console.error("Failed to update projects:", error)
       toast({
         title: "Error",
         description: "Something went wrong",
@@ -220,11 +231,110 @@ export default function TeamDetailPage() {
     }
   }
 
+  const removeMember = async (userId: string) => {
+    if (!team || !confirm("Are you sure you want to remove this member from the team?")) {
+      return
+    }
+
+    const updatedMembers = team.members.filter((m) => m.user.id !== userId).map((m) => m.user.id)
+
+    try {
+      const response = await fetch(`/api/teams/${teamId}/members`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: updatedMembers }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Member removed successfully",
+        })
+        fetchTeamDetail()
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.error || "Failed to remove member",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Failed to remove member:", error)
+      toast({
+        title: "Error",
+        description: "Something went wrong",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const removeProject = async (projectId: string) => {
+    if (!team || !confirm("Are you sure you want to remove this project from the team?")) {
+      return
+    }
+
+    const updatedProjects = team.teamProjects.filter((tp) => tp.project.id !== projectId).map((tp) => tp.project.id)
+
+    try {
+      const response = await fetch(`/api/teams/${teamId}/projects`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectIds: updatedProjects }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Project removed successfully",
+        })
+        fetchTeamDetail()
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.error || "Failed to remove project",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Failed to remove project:", error)
+      toast({
+        title: "Error",
+        description: "Something went wrong",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (!session?.user) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center py-12">
+          <LoadingSpinner size="lg" />
+        </div>
+      </MainLayout>
+    )
+  }
+
   if (loading) {
     return (
       <MainLayout>
         <div className="flex items-center justify-center py-12">
           <LoadingSpinner size="lg" />
+        </div>
+      </MainLayout>
+    )
+  }
+
+  if (error) {
+    return (
+      <MainLayout>
+        <div className="text-center py-12">
+          <ErrorMessage message={error} />
+          <Button onClick={() => router.back()} className="mt-4">
+            Go Back
+          </Button>
         </div>
       </MainLayout>
     )
@@ -240,6 +350,9 @@ export default function TeamDetailPage() {
       </MainLayout>
     )
   }
+
+  const teamMemberIds = team.members?.map((m) => m.user.id) || []
+  const userCanManage = canManageTeam(session.user.permissions, session.user.id, teamMemberIds)
 
   return (
     <MainLayout>
@@ -280,18 +393,18 @@ export default function TeamDetailPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Users className="h-5 w-5" />
-                  <CardTitle>Team Members ({team.members.length})</CardTitle>
+                  <CardTitle>Team Members ({team.members?.length || 0})</CardTitle>
                 </div>
-                {(canManageTeams || canManageAssignedTeams) && (
+                {userCanManage && (
                   <Button onClick={openMembersDialog}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Manage Members
+                    Add Members
                   </Button>
                 )}
               </div>
             </CardHeader>
             <CardContent>
-              {team.members.length === 0 ? (
+              {!team.members || team.members.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No members assigned</p>
               ) : (
                 <Table>
@@ -300,6 +413,7 @@ export default function TeamDetailPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
+                      {userCanManage && <TableHead>Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -312,6 +426,13 @@ export default function TeamDetailPage() {
                         <TableCell>
                           <Badge variant="secondary">{member.user.role.name}</Badge>
                         </TableCell>
+                        {userCanManage && (
+                          <TableCell>
+                            <Button variant="ghost" size="sm" onClick={() => removeMember(member.user.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -326,18 +447,18 @@ export default function TeamDetailPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <FolderOpen className="h-5 w-5" />
-                  <CardTitle>Assigned Projects ({team.teamProjects.length})</CardTitle>
+                  <CardTitle>Assigned Projects ({team.teamProjects?.length || 0})</CardTitle>
                 </div>
-                {(canManageTeams || canManageAssignedTeams) && (
+                {userCanManage && (
                   <Button onClick={openProjectsDialog}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Manage Projects
+                    Add Projects
                   </Button>
                 )}
               </div>
             </CardHeader>
             <CardContent>
-              {team.teamProjects.length === 0 ? (
+              {!team.teamProjects || team.teamProjects.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No projects assigned</p>
               ) : (
                 <Table>
@@ -346,6 +467,7 @@ export default function TeamDetailPage() {
                       <TableHead>Project Name</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead>Status</TableHead>
+                      {userCanManage && <TableHead>Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -358,6 +480,13 @@ export default function TeamDetailPage() {
                             {teamProject.project.isActive ? "Active" : "Inactive"}
                           </Badge>
                         </TableCell>
+                        {userCanManage && (
+                          <TableCell>
+                            <Button variant="ghost" size="sm" onClick={() => removeProject(teamProject.project.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -375,47 +504,51 @@ export default function TeamDetailPage() {
               <DialogDescription>Select users to add as team members</DialogDescription>
             </DialogHeader>
             <div className="py-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">Select</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {allUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedMembers.includes(user.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedMembers([...selectedMembers, user.id])
-                            } else {
-                              setSelectedMembers(selectedMembers.filter((id) => id !== user.id))
-                            }
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {user.firstName} {user.lastName}
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{user.role.name}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={user.isActive ? "default" : "secondary"}>
-                          {user.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
+              {allUsers.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No users available</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Select</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {allUsers.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedMembers.includes(user.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedMembers([...selectedMembers, user.id])
+                              } else {
+                                setSelectedMembers(selectedMembers.filter((id) => id !== user.id))
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {user.firstName} {user.lastName}
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{user.role.name}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={user.isActive ? "default" : "secondary"}>
+                            {user.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowMembersDialog(false)}>
@@ -446,41 +579,45 @@ export default function TeamDetailPage() {
               <DialogDescription>Select projects to assign to this team</DialogDescription>
             </DialogHeader>
             <div className="py-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">Select</TableHead>
-                    <TableHead>Project Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {allProjects.map((project) => (
-                    <TableRow key={project.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedProjects.includes(project.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedProjects([...selectedProjects, project.id])
-                            } else {
-                              setSelectedProjects(selectedProjects.filter((id) => id !== project.id))
-                            }
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{project.name}</TableCell>
-                      <TableCell>{project.description || "No description"}</TableCell>
-                      <TableCell>
-                        <Badge variant={project.isActive ? "default" : "secondary"}>
-                          {project.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
+              {allProjects.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No projects available</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Select</TableHead>
+                      <TableHead>Project Name</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {allProjects.map((project) => (
+                      <TableRow key={project.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedProjects.includes(project.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedProjects([...selectedProjects, project.id])
+                              } else {
+                                setSelectedProjects(selectedProjects.filter((id) => id !== project.id))
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{project.name}</TableCell>
+                        <TableCell>{project.description || "No description"}</TableCell>
+                        <TableCell>
+                          <Badge variant={project.isActive ? "default" : "secondary"}>
+                            {project.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowProjectsDialog(false)}>
