@@ -16,16 +16,17 @@ export default withAuth(
       return NextResponse.redirect(new URL("/auth/login", req.url))
     }
 
-    // Handle first-time login flow
-    if (token.mustChangePassword && pathname !== "/auth/change-password") {
+    // Handle first-time login flow - only redirect if password must be changed AND profile is not completed
+    if (token.mustChangePassword && !token.profileCompleted && pathname !== "/auth/change-password") {
       return NextResponse.redirect(new URL("/auth/change-password", req.url))
     }
 
-    if (!token.profileCompleted && pathname !== "/auth/complete-profile" && !token.mustChangePassword) {
+    // Handle profile completion - only if password doesn't need to be changed
+    if (!token.profileCompleted && !token.mustChangePassword && pathname !== "/auth/complete-profile") {
       return NextResponse.redirect(new URL("/auth/complete-profile", req.url))
     }
 
-    // Redirect to dashboard if trying to access auth pages while authenticated
+    // Redirect to dashboard if trying to access auth pages while fully authenticated
     if (pathname.startsWith("/auth/") && token && !token.mustChangePassword && token.profileCompleted) {
       return NextResponse.redirect(new URL("/dashboard", req.url))
     }

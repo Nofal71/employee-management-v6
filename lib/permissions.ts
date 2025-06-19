@@ -8,6 +8,7 @@ export const PERMISSIONS = {
   MANAGE_TEAMS: "manage_teams",
   VIEW_ALL_TIMESHEETS: "view_all_timesheets",
   EDIT_ALL_TIMESHEETS: "edit_all_timesheets",
+  MANAGE_TIMESHEETS: "manage_timesheets",
   GENERATE_REPORTS: "generate_reports",
 } as const
 
@@ -22,6 +23,7 @@ export const DEFAULT_PERMISSIONS = {
     PERMISSIONS.MANAGE_TEAMS,
     PERMISSIONS.VIEW_ALL_TIMESHEETS,
     PERMISSIONS.EDIT_ALL_TIMESHEETS,
+    PERMISSIONS.MANAGE_TIMESHEETS,
     PERMISSIONS.GENERATE_REPORTS,
   ],
   EMPLOYEE: [],

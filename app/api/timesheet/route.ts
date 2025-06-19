@@ -16,12 +16,13 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get("userId")
 
     const canViewAll = hasPermission(session.user.permissions, PERMISSIONS.VIEW_ALL_TIMESHEETS)
+    const canManage = hasPermission(session.user.permissions, PERMISSIONS.MANAGE_TIMESHEETS)
 
     const whereClause: any = {
       ...(date && { date: new Date(date) }),
     }
 
-    if (!canViewAll) {
+    if (!canViewAll && !canManage) {
       whereClause.userId = session.user.id
     } else if (userId && userId !== "all") {
       whereClause.userId = userId
@@ -54,12 +55,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { projectId, date, hours, description } = await request.json()
+    const { projectId, userId, date, hours, description } = await request.json()
+
+    const canManage = hasPermission(session.user.permissions, PERMISSIONS.MANAGE_TIMESHEETS)
+    const finalUserId = canManage && userId ? userId : session.user.id
 
     const entry = await prisma.timesheet.create({
       data: {
         projectId,
-        userId: session.user.id,
+        userId: finalUserId,
         date: new Date(date),
         hours: Number.parseFloat(hours),
         description,

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { LogOut, User, Sun, Moon, Monitor } from "lucide-react"
+import Link from "next/link"
 
 export function Header() {
   const { data: session } = useSession()
@@ -28,7 +29,11 @@ export function Header() {
   return (
     <header className="bg-card border-b border-border px-6 py-4">
       <div className="flex items-center justify-between">
-        <div className="flex-1" />
+        <div className="flex items-center">
+          <Link href="/" className="font-bold text-lg">
+            Acme Corp
+          </Link>
+        </div>
 
         <div className="flex items-center space-x-4">
           {/* Theme Toggle */}
@@ -76,9 +81,11 @@ export function Header() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
+              <DropdownMenuItem asChild>
+                <Link href="/profile">
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => signOut()}>
                 <LogOut className="mr-2 h-4 w-4" />

@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { BarChart3, Users, FolderOpen, UserCheck, Shield, FileText, Clock, Settings, Menu, X } from "lucide-react"
+import { BarChart3, Users, FolderOpen, UserCheck, Shield, FileText, Clock, Settings, Menu, X, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { hasPermission, PERMISSIONS } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,13 @@ const navigation = [
     name: "Dashboard",
     href: "/dashboard",
     icon: BarChart3,
-    permission: PERMISSIONS.VIEW_ANALYTICS,
+    permission: null, // Everyone can access dashboard
+  },
+  {
+    name: "Profile",
+    href: "/profile",
+    icon: User,
+    permission: null, // Everyone can access their profile
   },
   {
     name: "Users",

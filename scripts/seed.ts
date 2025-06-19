@@ -16,6 +16,7 @@ async function main() {
     { name: "manage_teams", description: "Can manage teams" },
     { name: "view_all_timesheets", description: "Can view all timesheets" },
     { name: "edit_all_timesheets", description: "Can edit all timesheets" },
+    { name: "manage_timesheets", description: "Can manage timesheets for all users" },
     { name: "generate_reports", description: "Can generate reports" },
   ]
 

@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Edit, Trash2 } from "lucide-react"
+import { Plus, Edit, Trash2, Clock } from "lucide-react"
 import { hasPermission, PERMISSIONS } from "@/lib/permissions"
 import { formatHours } from "@/lib/utils"
 
@@ -38,6 +38,7 @@ interface TimesheetEntry {
     firstName: string
     lastName: string
   }
+  createdAt: string
 }
 
 interface Project {
@@ -45,26 +46,38 @@ interface Project {
   name: string
 }
 
+interface User {
+  id: string
+  firstName: string
+  lastName: string
+}
+
 export default function TimesheetPage() {
   const { data: session } = useSession()
   const [entries, setEntries] = useState<TimesheetEntry[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newEntry, setNewEntry] = useState({
     projectId: "",
+    userId: "",
     hours: "",
     description: "",
   })
 
   const canViewAllTimesheets = hasPermission(session?.user.permissions || [], PERMISSIONS.VIEW_ALL_TIMESHEETS)
   const canEditAllTimesheets = hasPermission(session?.user.permissions || [], PERMISSIONS.EDIT_ALL_TIMESHEETS)
+  const canManageTimesheets = hasPermission(session?.user.permissions || [], PERMISSIONS.MANAGE_TIMESHEETS)
 
   useEffect(() => {
     fetchEntries()
     fetchProjects()
-  }, [selectedDate])
+    if (canManageTimesheets) {
+      fetchUsers()
+    }
+  }, [selectedDate, canManageTimesheets])
 
   const fetchEntries = async () => {
     try {
@@ -72,7 +85,7 @@ export default function TimesheetPage() {
         date: selectedDate.toISOString().split("T")[0],
       })
 
-      if (!canViewAllTimesheets) {
+      if (!canViewAllTimesheets && !canManageTimesheets) {
         params.append("userId", session?.user.id || "")
       }
 
@@ -100,6 +113,18 @@ export default function TimesheetPage() {
     }
   }
 
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch("/api/users")
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data.filter((u: any) => u.isActive))
+      }
+    } catch (error) {
+      console.error("Failed to fetch users:", error)
+    }
+  }
+
   const handleCreateEntry = async () => {
     try {
       const response = await fetch("/api/timesheet", {
@@ -107,13 +132,14 @@ export default function TimesheetPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...newEntry,
+          userId: canManageTimesheets ? newEntry.userId : session?.user.id,
           date: selectedDate.toISOString().split("T")[0],
           hours: Number.parseFloat(newEntry.hours),
         }),
       })
 
       if (response.ok) {
-        setNewEntry({ projectId: "", hours: "", description: "" })
+        setNewEntry({ projectId: "", userId: "", hours: "", description: "" })
         setIsCreateDialogOpen(false)
         fetchEntries()
       }
@@ -142,7 +168,10 @@ export default function TimesheetPage() {
     <MainLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Timesheet</h1>
+          <div className="flex items-center space-x-2">
+            <Clock className="h-8 w-8" />
+            <h1 className="text-3xl font-bold">Timesheet</h1>
+          </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -156,6 +185,26 @@ export default function TimesheetPage() {
                 <DialogDescription>Log time for {selectedDate.toLocaleDateString()}</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
+                {canManageTimesheets && (
+                  <div>
+                    <Label htmlFor="user">User</Label>
+                    <Select
+                      value={newEntry.userId}
+                      onValueChange={(value) => setNewEntry({ ...newEntry, userId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a user" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.firstName} {user.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="project">Project</Label>
                   <Select
@@ -203,8 +252,8 @@ export default function TimesheetPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <Card className="lg:col-span-1">
+        <div className="flex flex-col lg:flex-row gap-6">
+          <Card className="lg:w-80 flex-shrink-0">
             <CardHeader>
               <CardTitle>Select Date</CardTitle>
             </CardHeader>
@@ -213,12 +262,12 @@ export default function TimesheetPage() {
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
-                className="rounded-md border"
+                className="rounded-md border w-full"
               />
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-3">
+          <Card className="flex-1">
             <CardHeader>
               <CardTitle>Time Entries for {selectedDate.toLocaleDateString()}</CardTitle>
               <CardDescription>Total hours: {formatHours(totalHours)}</CardDescription>
@@ -227,22 +276,23 @@ export default function TimesheetPage() {
               {loading ? (
                 <div className="text-center py-8">Loading...</div>
               ) : entries.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No time entries for this date</div>
+                <div className="text-center py-8 text-muted-foreground">No time entries for this date</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {canViewAllTimesheets && <TableHead>User</TableHead>}
+                      {(canViewAllTimesheets || canManageTimesheets) && <TableHead>User</TableHead>}
                       <TableHead>Project</TableHead>
                       <TableHead>Hours</TableHead>
                       <TableHead>Description</TableHead>
+                      <TableHead>Time Logged</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {entries.map((entry) => (
                       <TableRow key={entry.id}>
-                        {canViewAllTimesheets && (
+                        {(canViewAllTimesheets || canManageTimesheets) && (
                           <TableCell>
                             {entry.user.firstName} {entry.user.lastName}
                           </TableCell>
@@ -250,9 +300,12 @@ export default function TimesheetPage() {
                         <TableCell className="font-medium">{entry.project.name}</TableCell>
                         <TableCell>{formatHours(entry.hours)}</TableCell>
                         <TableCell>{entry.description}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(entry.createdAt).toLocaleTimeString()}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-2">
-                            {(canEditAllTimesheets || entry.user.id === session?.user.id) && (
+                            {(canEditAllTimesheets || canManageTimesheets || entry.user.id === session?.user.id) && (
                               <>
                                 <Button variant="ghost" size="sm">
                                   <Edit className="h-4 w-4" />

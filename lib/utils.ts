@@ -13,7 +13,8 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatHours(hours: number): string {
-  return `${hours.toFixed(2)}h`
+  const numHours = typeof hours === "number" ? hours : Number(hours)
+  return `${numHours.toFixed(2)}h`
 }
 
 export function generatePassword(): string {
