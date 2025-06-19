@@ -45,7 +45,7 @@ async function main() {
     })
   }
 
-  // Create roles with correct field names
+  // Create roles
   console.log("👥 Creating roles...")
 
   // Check if owner role exists
@@ -65,15 +65,28 @@ async function main() {
       },
     })
 
-    // Connect permissions to owner role
-    await prisma.role.update({
-      where: { id: ownerRole.id },
-      data: {
-        permissions: {
-          connect: permissions.map((p) => ({ name: p.name })),
-        },
-      },
-    })
+    // Connect permissions to owner role using RolePermission junction table
+    for (const permission of permissions) {
+      const permissionRecord = await prisma.permission.findUnique({
+        where: { name: permission.name },
+      })
+
+      if (permissionRecord) {
+        await prisma.rolePermission.upsert({
+          where: {
+            roleId_permissionId: {
+              roleId: ownerRole.id,
+              permissionId: permissionRecord.id,
+            },
+          },
+          update: {},
+          create: {
+            roleId: ownerRole.id,
+            permissionId: permissionRecord.id,
+          },
+        })
+      }
+    }
   }
 
   // Check if employee role exists
@@ -112,14 +125,28 @@ async function main() {
     })
 
     // Connect specific permissions to team lead role
-    await prisma.role.update({
-      where: { id: teamLeadRole.id },
-      data: {
-        permissions: {
-          connect: [{ name: "manage_assigned_teams" }, { name: "view_all_timesheets" }],
-        },
-      },
-    })
+    const teamLeadPermissions = ["manage_assigned_teams", "view_all_timesheets"]
+    for (const permissionName of teamLeadPermissions) {
+      const permissionRecord = await prisma.permission.findUnique({
+        where: { name: permissionName },
+      })
+
+      if (permissionRecord) {
+        await prisma.rolePermission.upsert({
+          where: {
+            roleId_permissionId: {
+              roleId: teamLeadRole.id,
+              permissionId: permissionRecord.id,
+            },
+          },
+          update: {},
+          create: {
+            roleId: teamLeadRole.id,
+            permissionId: permissionRecord.id,
+          },
+        })
+      }
+    }
   }
 
   // Create owner user
@@ -210,6 +237,7 @@ async function main() {
         description: "Complete redesign of company website",
         isActive: true,
         companyId: company.id,
+        createdById: owner.id,
       },
     })
   }
@@ -228,6 +256,7 @@ async function main() {
         description: "Develop mobile application for iOS and Android",
         isActive: true,
         companyId: company.id,
+        createdById: owner.id,
       },
     })
   }
@@ -349,6 +378,10 @@ async function main() {
   console.log("Owner: admin@acme.com / admin123")
   console.log("Employee: employee@acme.com / employee123")
   console.log("Team Lead: teamlead@acme.com / teamlead123")
+  console.log("\n🔑 Permissions assigned:")
+  console.log("- Owner: All permissions")
+  console.log("- Team Lead: manage_assigned_teams, view_all_timesheets")
+  console.log("- Employee: No special permissions")
 }
 
 main()
