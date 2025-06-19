@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -12,7 +12,7 @@ export async function GET() {
 
     const company = await prisma.company.findUnique({
       where: { id: session.user.companyId },
-      select: { name: true },
+      select: { id: true, name: true },
     })
 
     if (!company) {

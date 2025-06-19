@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -10,6 +11,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Users, FolderOpen, Clock, DollarSign, BarChart3 } from "lucide-react"
 import { formatCurrency, formatHours } from "@/lib/utils"
 import { hasPermission, PERMISSIONS } from "@/lib/permissions"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { ErrorMessage } from "@/components/ui/error-message"
 
 interface DashboardStats {
   totalUsers: number
@@ -38,10 +41,12 @@ interface UserStats {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [userStats, setUserStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
@@ -49,18 +54,31 @@ export default function DashboardPage() {
   const [selectedProject, setSelectedProject] = useState<string>("all")
   const [selectedUser, setSelectedUser] = useState<string>("all")
 
-  const canViewAnalytics = hasPermission(session?.user.permissions || [], PERMISSIONS.VIEW_ANALYTICS)
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (status === "loading") return
+    if (!session) {
+      router.push("/auth/login")
+      return
+    }
+  }, [session, status, router])
+
+  const canViewAnalytics = session ? hasPermission(session.user.permissions || [], PERMISSIONS.VIEW_ANALYTICS) : false
 
   useEffect(() => {
-    if (canViewAnalytics) {
-      fetchStats()
-    } else {
-      fetchUserStats()
+    if (session) {
+      if (canViewAnalytics) {
+        fetchStats()
+      } else {
+        fetchUserStats()
+      }
     }
-  }, [dateRange, selectedProject, selectedUser, canViewAnalytics])
+  }, [dateRange, selectedProject, selectedUser, canViewAnalytics, session])
 
   const fetchStats = async () => {
     try {
+      setError(null)
+      setLoading(true)
       const params = new URLSearchParams({
         from: dateRange.from.toISOString(),
         to: dateRange.to.toISOString(),
@@ -69,12 +87,15 @@ export default function DashboardPage() {
       })
 
       const response = await fetch(`/api/dashboard/stats?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data)
+      if (!response.ok) {
+        throw new Error("Failed to fetch dashboard stats")
       }
+
+      const data = await response.json()
+      setStats(data)
     } catch (error) {
       console.error("Failed to fetch stats:", error)
+      setError("Failed to load dashboard statistics")
     } finally {
       setLoading(false)
     }
@@ -82,6 +103,8 @@ export default function DashboardPage() {
 
   const fetchUserStats = async () => {
     try {
+      setError(null)
+      setLoading(true)
       const params = new URLSearchParams({
         from: dateRange.from.toISOString(),
         to: dateRange.to.toISOString(),
@@ -89,15 +112,42 @@ export default function DashboardPage() {
       })
 
       const response = await fetch(`/api/dashboard/user-stats?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        setUserStats(data)
+      if (!response.ok) {
+        throw new Error("Failed to fetch user stats")
       }
+
+      const data = await response.json()
+      setUserStats(data)
     } catch (error) {
       console.error("Failed to fetch user stats:", error)
+      setError("Failed to load your dashboard statistics")
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show loading while session is loading
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    )
+  }
+
+  // Don't render anything if no session (will redirect)
+  if (!session) {
+    return null
+  }
+
+  if (error) {
+    return (
+      <MainLayout>
+        <div className="space-y-6">
+          <ErrorMessage message={error} />
+        </div>
+      </MainLayout>
+    )
   }
 
   if (!canViewAnalytics) {
@@ -106,9 +156,9 @@ export default function DashboardPage() {
         <div className="space-y-6">
           <div className="text-center py-8">
             <BarChart3 className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-            <h1 className="text-3xl font-bold mb-2">Welcome to ProjectHub</h1>
+            <h1 className="text-3xl font-bold mb-2">Welcome to Project Management</h1>
             <p className="text-muted-foreground mb-8">
-              Hello {session?.user.firstName}! Here's your personal dashboard overview.
+              Hello {session.user.firstName}! Here's your personal dashboard overview.
             </p>
           </div>
 
@@ -163,7 +213,7 @@ export default function DashboardPage() {
                       <Users className="h-8 w-8 text-purple-600" />
                       <div className="ml-4">
                         <p className="text-sm font-medium text-muted-foreground">Your Role</p>
-                        <p className="text-2xl font-bold">{session?.user.roleName}</p>
+                        <p className="text-2xl font-bold">{session.user.roleName || "Employee"}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -237,7 +287,6 @@ export default function DashboardPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Projects</SelectItem>
-                {/* Project options would be loaded dynamically */}
               </SelectContent>
             </Select>
             <Select value={selectedUser} onValueChange={setSelectedUser}>
@@ -246,7 +295,6 @@ export default function DashboardPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Users</SelectItem>
-                {/* User options would be loaded dynamically */}
               </SelectContent>
             </Select>
           </div>

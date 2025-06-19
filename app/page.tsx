@@ -12,8 +12,15 @@ export default function HomePage() {
   useEffect(() => {
     if (status === "loading") return
 
-    if (session) {
-      router.push("/dashboard")
+    if (session?.user) {
+      // Check if user needs to complete profile or change password
+      if (session.user.mustChangePassword && !session.user.profileCompleted) {
+        router.push("/auth/change-password")
+      } else if (!session.user.profileCompleted && !session.user.mustChangePassword) {
+        router.push("/auth/complete-profile")
+      } else {
+        router.push("/dashboard")
+      }
     } else {
       router.push("/auth/login")
     }
