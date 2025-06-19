@@ -68,6 +68,7 @@ export default function TimesheetPage() {
     hours: "",
     description: "",
   })
+  const [userProjects, setUserProjects] = useState<Project[]>([])
 
   const canViewAllTimesheets = hasPermission(session?.user.permissions || [], PERMISSIONS.VIEW_ALL_TIMESHEETS)
   const canEditAllTimesheets = hasPermission(session?.user.permissions || [], PERMISSIONS.EDIT_ALL_TIMESHEETS)
@@ -108,7 +109,19 @@ export default function TimesheetPage() {
       const response = await fetch("/api/projects")
       if (response.ok) {
         const data = await response.json()
-        setProjects(data.filter((p: any) => p.isActive))
+        const activeProjects = data.filter((p: any) => p.isActive)
+
+        // If user is not manager, only show assigned projects
+        if (!canManageTimesheets && !canViewAllTimesheets) {
+          const userResponse = await fetch(`/api/users/${session?.user.id}/projects`)
+          if (userResponse.ok) {
+            const userProjectData = await userResponse.json()
+            const assignedProjectIds = userProjectData.map((up: any) => up.project.id)
+            setProjects(activeProjects.filter((p: any) => assignedProjectIds.includes(p.id)))
+          }
+        } else {
+          setProjects(activeProjects)
+        }
       }
     } catch (error) {
       console.error("Failed to fetch projects:", error)
@@ -202,6 +215,19 @@ export default function TimesheetPage() {
 
   const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0)
 
+  const canEditEntry = (entry: TimesheetEntry) => {
+    const entryDate = new Date(entry.date).toDateString()
+    const today = new Date().toDateString()
+
+    // Managers can edit any entry
+    if (canEditAllTimesheets || canManageTimesheets) {
+      return true
+    }
+
+    // Users can only edit their own entries from today
+    return entry.user.id === session?.user.id && entryDate === today
+  }
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -210,84 +236,88 @@ export default function TimesheetPage() {
             <Clock className="h-8 w-8" />
             <h1 className="text-3xl font-bold">Timesheet</h1>
           </div>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Entry
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Time Entry</DialogTitle>
-                <DialogDescription>Log time for {selectedDate.toLocaleDateString()}</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                {canManageTimesheets && (
+          {(canManageTimesheets ||
+            canEditAllTimesheets ||
+            selectedDate.toDateString() === new Date().toDateString()) && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Entry
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Time Entry</DialogTitle>
+                  <DialogDescription>Log time for {selectedDate.toLocaleDateString()}</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  {canManageTimesheets && (
+                    <div>
+                      <Label htmlFor="user">User</Label>
+                      <Select
+                        value={newEntry.userId}
+                        onValueChange={(value) => setNewEntry({ ...newEntry, userId: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a user" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div>
-                    <Label htmlFor="user">User</Label>
+                    <Label htmlFor="project">Project</Label>
                     <Select
-                      value={newEntry.userId}
-                      onValueChange={(value) => setNewEntry({ ...newEntry, userId: value })}
+                      value={newEntry.projectId}
+                      onValueChange={(value) => setNewEntry({ ...newEntry, projectId: value })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a user" />
+                        <SelectValue placeholder="Select a project" />
                       </SelectTrigger>
                       <SelectContent>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.firstName} {user.lastName}
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                )}
-                <div>
-                  <Label htmlFor="project">Project</Label>
-                  <Select
-                    value={newEntry.projectId}
-                    onValueChange={(value) => setNewEntry({ ...newEntry, projectId: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <Label htmlFor="hours">Hours</Label>
+                    <Input
+                      id="hours"
+                      type="number"
+                      step="0.25"
+                      min="0"
+                      max="24"
+                      value={newEntry.hours}
+                      onChange={(e) => setNewEntry({ ...newEntry, hours: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={newEntry.description}
+                      onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
+                      placeholder="What did you work on?"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="hours">Hours</Label>
-                  <Input
-                    id="hours"
-                    type="number"
-                    step="0.25"
-                    min="0"
-                    max="24"
-                    value={newEntry.hours}
-                    onChange={(e) => setNewEntry({ ...newEntry, hours: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={newEntry.description}
-                    onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
-                    placeholder="What did you work on?"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleCreateEntry}>Add Entry</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button onClick={handleCreateEntry}>Add Entry</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {/* Edit Dialog */}
@@ -400,7 +430,7 @@ export default function TimesheetPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-2">
-                            {(canEditAllTimesheets || canManageTimesheets || entry.user.id === session?.user.id) && (
+                            {canEditEntry(entry) && (
                               <>
                                 <Button variant="ghost" size="sm" onClick={() => handleEditEntry(entry)}>
                                   <Edit className="h-4 w-4" />

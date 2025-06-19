@@ -6,6 +6,7 @@ export const PERMISSIONS = {
   EDIT_SETTINGS: "edit_settings",
   MANAGE_PROJECTS: "manage_projects",
   MANAGE_TEAMS: "manage_teams",
+  MANAGE_ASSIGNED_TEAMS: "manage_assigned_teams", // New permission
   VIEW_ALL_TIMESHEETS: "view_all_timesheets",
   EDIT_ALL_TIMESHEETS: "edit_all_timesheets",
   MANAGE_TIMESHEETS: "manage_timesheets",

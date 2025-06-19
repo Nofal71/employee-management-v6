@@ -20,11 +20,12 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Search, Edit, Trash2, Users, FolderOpen } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Users, FolderOpen, Eye } from "lucide-react"
 import { hasPermission, PERMISSIONS } from "@/lib/permissions"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { ErrorMessage } from "@/components/ui/error-message"
 import { useToast } from "@/hooks/use-toast"
+import { useRouter } from "next/navigation"
 
 interface Team {
   id: string
@@ -62,6 +63,7 @@ interface Project {
 export default function TeamsPage() {
   const { data: session } = useSession()
   const { toast } = useToast()
+  const router = useRouter()
   const [teams, setTeams] = useState<Team[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -629,6 +631,9 @@ export default function TeamsPage() {
                     <TableCell>{new Date(team.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => router.push(`/teams/${team.id}`)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => openEditDialog(team)}>
                           <Edit className="h-4 w-4" />
                         </Button>

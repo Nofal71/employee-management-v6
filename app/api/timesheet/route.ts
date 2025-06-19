@@ -60,6 +60,19 @@ export async function POST(request: NextRequest) {
     const canManage = hasPermission(session.user.permissions, PERMISSIONS.MANAGE_TIMESHEETS)
     const finalUserId = canManage && userId ? userId : session.user.id
 
+    // Check if entry already exists for this user, project, and date
+    const existingEntry = await prisma.timesheet.findFirst({
+      where: {
+        userId: finalUserId,
+        projectId,
+        date: new Date(date),
+      },
+    })
+
+    if (existingEntry) {
+      return NextResponse.json({ error: "Time entry already exists for this project on this date" }, { status: 400 })
+    }
+
     const entry = await prisma.timesheet.create({
       data: {
         projectId,

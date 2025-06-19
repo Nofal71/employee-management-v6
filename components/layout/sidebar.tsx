@@ -71,9 +71,13 @@ export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
 
-  const filteredNavigation = navigation.filter(
-    (item) => !item.permission || hasPermission(session?.user.permissions || [], item.permission),
-  )
+  const filteredNavigation = navigation.filter((item) => {
+    // Remove profile from sidebar for owners - they'll access it via header dropdown
+    if (item.href === "/profile" && hasPermission(session?.user.permissions || [], PERMISSIONS.EDIT_SETTINGS)) {
+      return false
+    }
+    return !item.permission || hasPermission(session?.user.permissions || [], item.permission)
+  })
 
   return (
     <>
