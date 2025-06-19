@@ -1,140 +1,145 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
-import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
-import { validatePassword } from "@/lib/utils"
+import { useToast } from "@/hooks/use-toast"
 
 export default function ChangePasswordPage() {
-  const { data: session, update } = useSession()
-  const [formData, setFormData] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
   const router = useRouter()
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {}
-
-    if (!formData.currentPassword) {
-      newErrors.currentPassword = "Current password is required"
-    }
-
-    if (!formData.newPassword) {
-      newErrors.newPassword = "New password is required"
-    } else {
-      const passwordValidation = validatePassword(formData.newPassword)
-      if (!passwordValidation.isValid) {
-        newErrors.newPassword = passwordValidation.errors[0]
-      }
-    }
-
-    if (formData.newPassword !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match"
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
 
-    if (!validateForm()) {
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match")
       return
     }
 
-    setLoading(true)
+    if (newPassword.length < 6) {
+      setError("New password must be at least 6 characters long")
+      return
+    }
+
+    setIsLoading(true)
 
     try {
       const response = await fetch("/api/auth/change-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword,
+          currentPassword,
+          newPassword,
         }),
       })
 
-      if (response.ok) {
-        await update({ mustChangePassword: false })
-        router.push(session?.user.profileCompleted ? "/dashboard" : "/auth/complete-profile")
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to change password")
+      }
+
+      toast({
+        title: "Success",
+        description: "Password changed successfully",
+      })
+
+      // Sign in again with new password to update the session
+      const signInResult = await signIn("credentials", {
+        email: data.email || "", // We'll need to return email from the API
+        password: newPassword,
+        redirect: false,
+      })
+
+      if (signInResult?.ok) {
+        router.push("/dashboard")
+        router.refresh()
       } else {
-        const data = await response.json()
-        setErrors({ general: data.error || "Failed to change password" })
+        // If sign in fails, still redirect to dashboard as password was changed
+        router.push("/dashboard")
       }
     } catch (error) {
-      setErrors({ general: "Something went wrong" })
+      console.error("Password change error:", error)
+      setError(error instanceof Error ? error.message : "Failed to change password")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Change Password</CardTitle>
-          <CardDescription>You must change your password before continuing</CardDescription>
+          <CardDescription>Please change your password to continue</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {errors.general && (
+            {error && (
               <Alert variant="destructive">
-                <AlertDescription>{errors.general}</AlertDescription>
+                <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="currentPassword">Current Password</Label>
               <Input
                 id="currentPassword"
                 type="password"
-                value={formData.currentPassword}
-                onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
-                className={errors.currentPassword ? "border-destructive" : ""}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+                disabled={isLoading}
               />
-              {errors.currentPassword && <p className="text-sm text-destructive mt-1">{errors.currentPassword}</p>}
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="newPassword">New Password</Label>
               <Input
                 id="newPassword"
                 type="password"
-                value={formData.newPassword}
-                onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                className={errors.newPassword ? "border-destructive" : ""}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                minLength={6}
               />
-              {errors.newPassword && <p className="text-sm text-destructive mt-1">{errors.newPassword}</p>}
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm New Password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                className={errors.confirmPassword ? "border-destructive" : ""}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                minLength={6}
               />
-              {errors.confirmPassword && <p className="text-sm text-destructive mt-1">{errors.confirmPassword}</p>}
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
                 <>
-                  <LoadingSpinner size="sm" className="mr-2" />
+                  <LoadingSpinner className="mr-2 h-4 w-4" />
                   Changing Password...
                 </>
               ) : (

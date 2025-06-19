@@ -31,16 +31,19 @@ async function main() {
     })
   }
 
-  // Create company
+  // Create company - using findFirst and create instead of upsert
   console.log("🏢 Creating company...")
-  const company = await prisma.company.upsert({
+  let company = await prisma.company.findFirst({
     where: { name: "Acme Corporation" },
-    update: {},
-    create: {
-      name: "Acme Corporation",
-      description: "A sample company for demonstration",
-    },
   })
+
+  if (!company) {
+    company = await prisma.company.create({
+      data: {
+        name: "Acme Corporation",
+      },
+    })
+  }
 
   // Create roles
   console.log("👥 Creating roles...")
@@ -109,6 +112,7 @@ async function main() {
       password: hashedPassword,
       isActive: true,
       profileCompleted: true,
+      mustChangePassword: false,
       companyId: company.id,
       roleId: ownerRole.id,
     },
@@ -128,6 +132,7 @@ async function main() {
       password: employeePassword,
       isActive: true,
       profileCompleted: true,
+      mustChangePassword: false,
       companyId: company.id,
       roleId: employeeRole.id,
     },
@@ -147,6 +152,7 @@ async function main() {
       password: teamLeadPassword,
       isActive: true,
       profileCompleted: true,
+      mustChangePassword: false,
       companyId: company.id,
       roleId: teamLeadRole.id,
     },

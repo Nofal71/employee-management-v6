@@ -17,6 +17,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Current password and new password are required" }, { status: 400 })
     }
 
+    if (newPassword.length < 6) {
+      return NextResponse.json({ error: "New password must be at least 6 characters long" }, { status: 400 })
+    }
+
     // Get user with current password
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Hash new password
     const hashedNewPassword = await bcrypt.hash(newPassword, 12)
 
-    // Update password
+    // Update password and clear mustChangePassword flag
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
@@ -44,7 +48,10 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ message: "Password changed successfully" })
+    return NextResponse.json({
+      message: "Password changed successfully",
+      email: user.email,
+    })
   } catch (error) {
     console.error("Change password error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
