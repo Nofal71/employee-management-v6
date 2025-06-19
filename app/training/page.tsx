@@ -87,8 +87,8 @@ export default function TrainingPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTraining, setEditingTraining] = useState<Training | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all") // Updated default value
-  const [levelFilter, setLevelFilter] = useState<string>("all") // Updated default value
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [levelFilter, setLevelFilter] = useState<string>("all")
   const [submitting, setSubmitting] = useState(false)
 
   // Form state
@@ -114,14 +114,25 @@ export default function TrainingPage() {
   const fetchTrainings = async () => {
     try {
       setLoading(true)
+      setError(null)
       const response = await fetch("/api/training")
       if (!response.ok) {
         throw new Error("Failed to fetch trainings")
       }
       const data = await response.json()
-      setTrainings(data)
+
+      // Handle both paginated and direct array responses
+      if (data.data && Array.isArray(data.data)) {
+        setTrainings(data.data)
+      } else if (Array.isArray(data)) {
+        setTrainings(data)
+      } else {
+        setTrainings([])
+      }
     } catch (err) {
+      console.error("Error fetching trainings:", err)
       setError(err instanceof Error ? err.message : "An error occurred")
+      setTrainings([])
     } finally {
       setLoading(false)
     }
@@ -170,21 +181,32 @@ export default function TrainingPage() {
       const url = editingTraining ? `/api/training/${editingTraining.id}` : "/api/training"
       const method = editingTraining ? "PUT" : "POST"
 
+      const payload = {
+        courseName: formData.courseName,
+        courseLink: formData.courseLink || null,
+        courseCategory: formData.courseCategory,
+        organizationName: formData.organizationName,
+        certificateTitle: formData.certificateTitle,
+        level: formData.level,
+        startDate: formData.startDate?.toISOString(),
+        endDate: formData.endDate?.toISOString() || null,
+        expectedEndDate: formData.expectedEndDate?.toISOString() || null,
+        status: formData.status,
+        outcome: formData.outcome,
+        notes: formData.notes || null,
+      }
+
       const response = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...formData,
-          startDate: formData.startDate?.toISOString(),
-          endDate: formData.endDate?.toISOString(),
-          expectedEndDate: formData.expectedEndDate?.toISOString(),
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to save training")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to save training")
       }
 
       toast({
@@ -196,6 +218,7 @@ export default function TrainingPage() {
       resetForm()
       fetchTrainings()
     } catch (err) {
+      console.error("Error saving training:", err)
       toast({
         title: "Error",
         description: err instanceof Error ? err.message : "An error occurred",
@@ -267,15 +290,18 @@ export default function TrainingPage() {
     }
   }
 
-  const filteredTrainings = trainings.filter((training) => {
-    const matchesSearch =
-      training.courseName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      training.organizationName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      training.courseCategory.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || training.status === statusFilter
-    const matchesLevel = levelFilter === "all" || training.level === levelFilter
-    return matchesSearch && matchesStatus && matchesLevel
-  })
+  // Ensure trainings is always an array before filtering
+  const filteredTrainings = Array.isArray(trainings)
+    ? trainings.filter((training) => {
+        const matchesSearch =
+          training.courseName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          training.organizationName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          training.courseCategory.toLowerCase().includes(searchTerm.toLowerCase())
+        const matchesStatus = statusFilter === "all" || training.status === statusFilter
+        const matchesLevel = levelFilter === "all" || training.level === levelFilter
+        return matchesSearch && matchesStatus && matchesLevel
+      })
+    : []
 
   if (loading) {
     return (

@@ -14,8 +14,6 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || ""
     const status = searchParams.get("status") || ""
     const level = searchParams.get("level") || ""
-    const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
 
     const where = {
       userId: session.user.id,
@@ -26,31 +24,16 @@ export async function GET(request: NextRequest) {
           { courseCategory: { contains: search, mode: "insensitive" as const } },
         ],
       }),
-      ...(status && { status }),
-      ...(level && { level }),
+      ...(status && status !== "all" && { status }),
+      ...(level && level !== "all" && { level }),
     }
 
-    const [trainings, total] = await Promise.all([
-      prisma.training.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.training.count({ where }),
-    ])
-
-    return NextResponse.json({
-      data: trainings,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: page * limit < total,
-        hasPrev: page > 1,
-      },
+    const trainings = await prisma.training.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
     })
+
+    return NextResponse.json(trainings)
   } catch (error) {
     console.error("Error fetching trainings:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -112,18 +95,18 @@ export async function POST(request: NextRequest) {
 
     const training = await prisma.training.create({
       data: {
-        courseName,
-        courseLink: courseLink || null,
-        courseCategory,
-        organizationName,
-        certificateTitle,
+        courseName: courseName.trim(),
+        courseLink: courseLink?.trim() || null,
+        courseCategory: courseCategory.trim(),
+        organizationName: organizationName.trim(),
+        certificateTitle: certificateTitle.trim(),
         level,
         startDate: new Date(startDate),
         endDate: endDate ? new Date(endDate) : null,
         expectedEndDate: expectedEndDate ? new Date(expectedEndDate) : null,
         status,
         outcome,
-        notes: notes || null,
+        notes: notes?.trim() || null,
         userId: session.user.id,
       },
     })
