@@ -53,19 +53,21 @@ export default function TeamsPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
 
-  const canManageTeams = hasPermission(session?.user?.permissions || [], PERMISSIONS.MANAGE_TEAMS)
+  const canManageAllTeams = hasPermission(session?.user?.permissions || [], PERMISSIONS.MANAGE_TEAMS)
   const canManageAssignedTeams = hasPermission(session?.user?.permissions || [], PERMISSIONS.MANAGE_ASSIGNED_TEAMS)
 
   useEffect(() => {
-    if (session?.user && (canManageTeams || canManageAssignedTeams)) {
+    if (session?.user && (canManageAllTeams || canManageAssignedTeams)) {
       fetchTeams()
     }
-  }, [session, canManageTeams, canManageAssignedTeams])
+  }, [session, canManageAllTeams, canManageAssignedTeams])
 
   const fetchTeams = async () => {
     try {
       setError("")
-      const response = await fetch("/api/teams")
+      // Add query parameter to indicate if user can only see assigned teams
+      const url = canManageAllTeams ? "/api/teams" : "/api/teams?assignedOnly=true"
+      const response = await fetch(url)
       if (response.ok) {
         const data = await response.json()
         setTeams(data || [])
@@ -225,7 +227,7 @@ export default function TeamsPage() {
     )
   }
 
-  if (!canManageTeams && !canManageAssignedTeams) {
+  if (!canManageAllTeams && !canManageAssignedTeams) {
     return (
       <MainLayout>
         <div className="text-center py-12">
@@ -250,8 +252,13 @@ export default function TeamsPage() {
     <MainLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Teams</h1>
-          {canManageTeams && (
+          <div>
+            <h1 className="text-3xl font-bold">Teams</h1>
+            {canManageAssignedTeams && !canManageAllTeams && (
+              <p className="text-sm text-muted-foreground mt-1">Showing only teams you're assigned to</p>
+            )}
+          </div>
+          {canManageAllTeams && (
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -368,7 +375,9 @@ export default function TeamsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Team Management</CardTitle>
-            <CardDescription>Manage teams and their assignments</CardDescription>
+            <CardDescription>
+              {canManageAllTeams ? "Manage all teams and their assignments" : "Manage teams you're assigned to"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center space-x-2 mb-4">
@@ -405,7 +414,7 @@ export default function TeamsPage() {
                         <Button variant="ghost" size="sm" onClick={() => openEditDialog(team)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        {canManageTeams && (
+                        {canManageAllTeams && (
                           <Button variant="ghost" size="sm" onClick={() => deleteTeam(team.id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -419,7 +428,11 @@ export default function TeamsPage() {
 
             {filteredTeams.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                {searchTerm ? "No teams found matching your search." : "No teams created yet."}
+                {searchTerm
+                  ? "No teams found matching your search."
+                  : canManageAssignedTeams && !canManageAllTeams
+                    ? "You're not assigned to any teams yet."
+                    : "No teams created yet."}
               </div>
             )}
           </CardContent>

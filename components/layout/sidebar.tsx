@@ -4,7 +4,20 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { BarChart3, Users, FolderOpen, UserCheck, Shield, FileText, Clock, Settings, Menu, X, User } from "lucide-react"
+import {
+  BarChart3,
+  Users,
+  FolderOpen,
+  UserCheck,
+  Shield,
+  FileText,
+  Clock,
+  Settings,
+  Menu,
+  X,
+  User,
+  GraduationCap,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { hasPermission, PERMISSIONS } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
@@ -23,6 +36,12 @@ const navigation = [
     permission: null, // Everyone can access their profile
   },
   {
+    name: "Training",
+    href: "/training",
+    icon: GraduationCap,
+    permission: null, // Everyone can access their training
+  },
+  {
     name: "Users",
     href: "/users",
     icon: Users,
@@ -38,7 +57,10 @@ const navigation = [
     name: "Teams",
     href: "/teams",
     icon: UserCheck,
-    permission: PERMISSIONS.MANAGE_TEAMS,
+    permission: null, // Special handling for team permissions
+    showIf: (permissions: string[]) =>
+      hasPermission(permissions, PERMISSIONS.MANAGE_TEAMS) ||
+      hasPermission(permissions, PERMISSIONS.MANAGE_ASSIGNED_TEAMS),
   },
   {
     name: "Roles",
@@ -73,10 +95,16 @@ export function Sidebar() {
 
   const filteredNavigation = navigation.filter((item) => {
     // Remove profile from sidebar for owners - they'll access it via header dropdown
-    if (item.href === "/profile" && hasPermission(session?.user.permissions || [], PERMISSIONS.EDIT_SETTINGS)) {
+    if (item.href === "/profile" && hasPermission(session?.user?.permissions || [], PERMISSIONS.EDIT_SETTINGS)) {
       return false
     }
-    return !item.permission || hasPermission(session?.user.permissions || [], item.permission)
+
+    // Special handling for teams
+    if (item.showIf) {
+      return item.showIf(session?.user?.permissions || [])
+    }
+
+    return !item.permission || hasPermission(session?.user?.permissions || [], item.permission)
   })
 
   return (

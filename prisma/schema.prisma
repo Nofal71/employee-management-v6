@@ -43,6 +43,7 @@ model User {
   teamMembers    TeamMember[]
   timesheets     Timesheet[]
   createdProjects Project[] @relation("ProjectCreator")
+  trainings      Training[]
 
   @@map("users")
 }
@@ -175,4 +176,27 @@ model Timesheet {
 
   @@unique([userId, projectId, date])
   @@map("timesheets")
+}
+
+model Training {
+  id               String   @id @default(cuid())
+  courseName       String
+  courseLink       String?
+  courseCategory   String
+  organizationName String
+  certificateTitle String
+  level            String   // beginner, intermediate, advanced
+  startDate        DateTime
+  endDate          DateTime?
+  expectedEndDate  DateTime?
+  status           String   // started, in_progress, completed, others
+  outcome          String   // certificate, demo, others
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("trainings")
 }

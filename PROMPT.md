@@ -52,6 +52,31 @@ model User {
   role              Role?     @relation(fields: [roleId], references: [id])
   teamMemberships   TeamMember[]
   timesheets        Timesheet[]
+  trainings         Training[]  // New training/certification module
+}
+\`\`\`
+
+### Training/Certification Module
+\`\`\`prisma
+model Training {
+  id               String   @id @default(cuid())
+  courseName       String
+  courseLink       String?
+  courseCategory   String
+  organizationName String
+  certificateTitle String
+  level            String   // beginner, intermediate, advanced
+  startDate        DateTime
+  endDate          DateTime?
+  expectedEndDate  DateTime?
+  status           String   // started, in_progress, completed, others
+  outcome          String   // certificate, demo, others
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
 }
 \`\`\`
 
@@ -183,7 +208,7 @@ Implement comprehensive role-based access control with these permissions:
 ### Project & Team Management
 - **manage_projects**: Create, edit, and manage projects
 - **manage_teams**: Create, edit, and manage all teams
-- **manage_assigned_teams**: Manage only teams user is assigned to (for team leads)
+- **manage_assigned_teams**: **NEW** - Manage only teams user is assigned to (for team leads)
 
 ### Timesheet Management
 - **view_all_timesheets**: View timesheets for all users
@@ -199,7 +224,7 @@ Implement comprehensive role-based access control with these permissions:
 1. **Company Signup**: Creates company and owner account simultaneously
 2. **User Login**: Secure credentials-based authentication
 3. **Profile Completion**: Required after first login for new users
-4. **Password Management**: Secure password change with session update
+4. **Password Management**: Secure password change with session update and redirect to dashboard
 5. **Role-based Access**: Different permissions and landing pages
 
 ### Security Features
@@ -224,7 +249,7 @@ Implement comprehensive role-based access control with these permissions:
 
 **Permissions Required:**
 - Basic access for all authenticated users
-- `view_analytics` for full analytics dashboard
+- \`view_analytics\` for full analytics dashboard
 
 ### 2. User Management (/users)
 **Features:**
@@ -238,8 +263,8 @@ Implement comprehensive role-based access control with these permissions:
 - User creation with automatic email invitations
 
 **Permissions Required:**
-- `manage_users` for full user management
-- `delete_users` for account deletion
+- \`manage_users\` for full user management
+- \`delete_users\` for account deletion
 
 ### 3. Project Management (/projects)
 **Features:**
@@ -252,11 +277,15 @@ Implement comprehensive role-based access control with these permissions:
 - Pagination for large project lists
 
 **Permissions Required:**
-- `manage_projects` for full project management
+- \`manage_projects\` for full project management
 
 ### 4. Team Management (/teams)
 **Features:**
 - Team creation and management
+- **Enhanced Permission Handling**:
+  - Users with \`manage_teams\`: Can see and manage all teams
+  - Users with \`manage_assigned_teams\`: Can only see and manage teams they're assigned to
+  - Sidebar shows "Teams" for both permission types
 - **Clickable team rows** for navigation to detail pages
 - **Team Detail Pages (/teams/[id])** with:
   - Complete team information and statistics
@@ -268,8 +297,8 @@ Implement comprehensive role-based access control with these permissions:
 - Pagination for large team datasets
 
 **Permissions Required:**
-- `manage_teams` for managing all teams
-- `manage_assigned_teams` for managing only assigned teams (team leads)
+- \`manage_teams\` for managing all teams
+- \`manage_assigned_teams\` for managing only assigned teams (team leads)
 
 ### 5. Role Management (/roles)
 **Features:**
@@ -281,7 +310,7 @@ Implement comprehensive role-based access control with these permissions:
 - Role duplication and templating
 
 **Permissions Required:**
-- `manage_roles` for full role management
+- \`manage_roles\` for full role management
 
 ### 6. Timesheet Management (/timesheet)
 **Features:**
@@ -300,25 +329,54 @@ Implement comprehensive role-based access control with these permissions:
 
 **Permissions Required:**
 - Basic access for personal timesheet management
-- `view_all_timesheets` for viewing all user data
-- `edit_all_timesheets` for editing any timesheet
-- `manage_timesheets` for full management capabilities
+- \`view_all_timesheets\` for viewing all user data
+- \`edit_all_timesheets\` for editing any timesheet
+- \`manage_timesheets\` for full management capabilities
 
-### 7. Reports (/reports)
+### 7. **NEW** Training & Certification Management (/training)
+**Features:**
+- **Personal Training Dashboard**: Each user can manage their own training records
+- **Comprehensive Training Records** with fields:
+  - Course Name (required)
+  - Course Link (optional URL)
+  - Course Category (e.g., Technical, Soft Skills, Compliance)
+  - Organization Name (training provider)
+  - Certificate Name/Title
+  - Level: Beginner, Intermediate, Advanced
+  - Start Date (required)
+  - End Date (for completed courses)
+  - Expected End Date (for ongoing courses)
+  - Status: Started, In Progress, Completed, Others
+  - Outcome: Certificate, Demo, Others
+  - Notes (optional additional information)
+- **CRUD Operations**: Create, view, edit, delete training records
+- **Advanced Filtering**: By status, level, category, date range
+- **Search Functionality**: Search by course name, organization, category
+- **Progress Tracking**: Visual indicators for training status
+- **Export Capabilities**: Export training records for HR/compliance
+- **Responsive Design**: Mobile-friendly interface for on-the-go access
+
+**Access Control:**
+- All authenticated users can access their own training records
+- Managers with appropriate permissions can view team training records
+- HR personnel can access company-wide training analytics
+
+### 8. Reports (/reports)
 **Features:**
 - Comprehensive reporting dashboard
 - Monthly and custom date range reports
 - Project-based productivity reports
 - User performance analytics
+- **Training Reports**: Training completion rates, certification tracking
 - Export functionality (CSV, PDF)
 - Advanced filtering and grouping options
 - Scheduled report generation
 - Report sharing and collaboration
 
 **Permissions Required:**
-- `generate_reports` for full reporting access
+- \`generate_reports\` for full reporting access
 
-### 8. Settings (/settings)
+### 9. Settings (/settings)
 **Features:**
 - Company information management
 - System configuration options
@@ -328,9 +386,9 @@ Implement comprehensive role-based access control with these permissions:
 - Audit log viewing
 
 **Permissions Required:**
-- `edit_settings` for system configuration
+- \`edit_settings\` for system configuration
 
-### 9. Profile Management
+### 10. Profile Management
 **Access Method:**
 - **For Owners**: Accessible via header dropdown menu (three dots)
 - **For Other Users**: Available in sidebar navigation
@@ -350,6 +408,7 @@ Implement comprehensive role-based access control with these permissions:
 - **Collapsible sidebar** for mobile and tablet devices
 - **Consistent card-based layouts** throughout the application
 - **Loading states** and error handling for all interactions
+- **Training icon** (GraduationCap) in sidebar for all users
 
 ### Data Tables
 - **Pagination** for all large datasets with configurable page sizes
@@ -365,6 +424,8 @@ Implement comprehensive role-based access control with these permissions:
 - **Toast notifications** for user feedback
 - **Loading spinners** and skeleton screens
 - **Optimistic updates** for better user experience
+- **Date pickers** for training start/end dates
+- **Select dropdowns** for training levels, status, outcomes
 
 ### Responsive Design
 - **Mobile-first approach** with progressive enhancement
@@ -379,7 +440,7 @@ Implement comprehensive role-based access control with these permissions:
 \`\`\`typescript
 POST /api/auth/signup          // Company and owner creation
 POST /api/auth/complete-profile // Profile completion
-POST /api/auth/change-password  // Secure password updates
+POST /api/auth/change-password  // Secure password updates (redirects to dashboard)
 \`\`\`
 
 ### Resource Management APIs
@@ -399,8 +460,9 @@ GET    /api/projects/[id]      // Get project details
 PUT    /api/projects/[id]      // Update project
 DELETE /api/projects/[id]      // Delete project
 
-// Team Management
-GET    /api/teams              // List teams with pagination
+// Team Management (Enhanced)
+GET    /api/teams              // List teams (all or assigned based on permissions)
+GET    /api/teams?assignedOnly=true // List only assigned teams for team leads
 POST   /api/teams              // Create team
 GET    /api/teams/[id]         // Get team details with members/projects
 PUT    /api/teams/[id]         // Update team
@@ -409,6 +471,13 @@ POST   /api/teams/[id]/members // Add team members
 DELETE /api/teams/[id]/members // Remove team members
 POST   /api/teams/[id]/projects // Assign projects to team
 DELETE /api/teams/[id]/projects // Remove projects from team
+
+// Training Management (NEW)
+GET    /api/training           // Get user's training records with filtering
+POST   /api/training           // Create new training record
+GET    /api/training/[id]      // Get specific training record
+PUT    /api/training/[id]      // Update training record
+DELETE /api/training/[id]      // Delete training record
 
 // Timesheet Management
 GET    /api/timesheet          // Get timesheet entries with filtering
@@ -430,6 +499,21 @@ GET    /api/permissions        // List all permissions
 \`\`\`
 
 ## Advanced Features
+
+### Enhanced Team Management
+- **Permission-based Team Access**:
+  - \`manage_teams\`: Full access to all teams
+  - \`manage_assigned_teams\`: Access only to assigned teams
+  - API automatically filters teams based on user permissions
+  - Clear UI indicators showing access level
+
+### Training/Certification System
+- **Comprehensive Training Tracking**:
+  - Personal training dashboard for each user
+  - Detailed training records with all relevant fields
+  - Progress tracking and status management
+  - Integration with reporting system
+  - Export capabilities for compliance
 
 ### Pagination Implementation
 \`\`\`typescript
@@ -457,10 +541,11 @@ interface PaginatedResponse<T> {
 \`\`\`
 
 ### Team Lead Permissions
-- Create roles with `manage_assigned_teams` permission
+- Create roles with \`manage_assigned_teams\` permission
 - Team leads can only manage teams they are members of
 - Restricted access prevents managing all teams
 - Separate permission from full team management
+- Clear UI feedback showing limited access
 
 ### Employee Timesheet Restrictions
 - **Date Validation**: Only current date entries allowed for employees
@@ -485,6 +570,7 @@ project-management-system/
 │   │   ├── teams/
 │   │   ├── roles/
 │   │   ├── timesheet/
+│   │   ├── training/          # NEW - Training API routes
 │   │   ├── reports/
 │   │   ├── dashboard/
 │   │   ├── company/
@@ -502,6 +588,7 @@ project-management-system/
 │   │   └── [id]/
 │   ├── roles/
 │   ├── timesheet/
+│   ├── training/              # NEW - Training management page
 │   ├── reports/
 │   ├── settings/
 │   ├── profile/
@@ -511,7 +598,7 @@ project-management-system/
 ├── components/
 │   ├── layout/
 │   │   ├── main-layout.tsx
-│   │   ├── sidebar.tsx
+│   │   ├── sidebar.tsx        # Updated with training link
 │   │   └── header.tsx
 │   ├── ui/
 │   │   ├── [shadcn-components]
@@ -523,12 +610,12 @@ project-management-system/
 ├── lib/
 │   ├── auth.ts
 │   ├── prisma.ts
-│   ├── permissions.ts
+│   ├── permissions.ts         # Updated with team permission logic
 │   └── utils.ts
 ├── hooks/
 │   └── use-toast.ts
 ├── prisma/
-│   └── schema.prisma
+│   └── schema.prisma          # Updated with Training model
 ├── scripts/
 │   └── seed.ts
 ├── middleware.ts
@@ -654,4 +741,4 @@ export default nextConfig;
 - [ ] Backup strategy implemented
 - [ ] Performance monitoring enabled
 
-Generate this complete system with all specified features, proper error handling, comprehensive security measures, responsive design, and production-ready code quality. Ensure all TypeScript types are properly defined, all edge cases are handled, and the user experience is smooth and intuitive.
+Generate this complete system with all specified features, including the new training/certification module and enhanced team management permissions. Ensure proper error handling, comprehensive security measures, responsive design, and production-ready code quality. All TypeScript types should be properly defined, all edge cases handled, and the user experience should be smooth and intuitive.
