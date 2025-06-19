@@ -60,6 +60,8 @@ export default function TimesheetPage() {
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<TimesheetEntry | null>(null)
   const [newEntry, setNewEntry] = useState({
     projectId: "",
     userId: "",
@@ -145,6 +147,42 @@ export default function TimesheetPage() {
       }
     } catch (error) {
       console.error("Failed to create timesheet entry:", error)
+    }
+  }
+
+  const handleEditEntry = (entry: TimesheetEntry) => {
+    setEditingEntry(entry)
+    setNewEntry({
+      projectId: entry.project.id,
+      userId: entry.user.id,
+      hours: entry.hours.toString(),
+      description: entry.description,
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateEntry = async () => {
+    if (!editingEntry) return
+
+    try {
+      const response = await fetch(`/api/timesheet/${editingEntry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: newEntry.projectId,
+          hours: Number.parseFloat(newEntry.hours),
+          description: newEntry.description,
+        }),
+      })
+
+      if (response.ok) {
+        setNewEntry({ projectId: "", userId: "", hours: "", description: "" })
+        setEditingEntry(null)
+        setIsEditDialogOpen(false)
+        fetchEntries()
+      }
+    } catch (error) {
+      console.error("Failed to update timesheet entry:", error)
     }
   }
 
@@ -252,6 +290,63 @@ export default function TimesheetPage() {
           </Dialog>
         </div>
 
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Time Entry</DialogTitle>
+              <DialogDescription>Update time entry details</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div>
+                <Label htmlFor="edit-project">Project</Label>
+                <Select
+                  value={newEntry.projectId}
+                  onValueChange={(value) => setNewEntry({ ...newEntry, projectId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-hours">Hours</Label>
+                <Input
+                  id="edit-hours"
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  max="24"
+                  value={newEntry.hours}
+                  onChange={(e) => setNewEntry({ ...newEntry, hours: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={newEntry.description}
+                  onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
+                  placeholder="What did you work on?"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateEntry}>Update Entry</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div className="flex flex-col lg:flex-row gap-6">
           <Card className="lg:w-80 flex-shrink-0">
             <CardHeader>
@@ -307,7 +402,7 @@ export default function TimesheetPage() {
                           <div className="flex items-center space-x-2">
                             {(canEditAllTimesheets || canManageTimesheets || entry.user.id === session?.user.id) && (
                               <>
-                                <Button variant="ghost" size="sm">
+                                <Button variant="ghost" size="sm" onClick={() => handleEditEntry(entry)}>
                                   <Edit className="h-4 w-4" />
                                 </Button>
                                 <Button variant="ghost" size="sm" onClick={() => deleteEntry(entry.id)}>

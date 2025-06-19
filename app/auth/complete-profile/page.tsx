@@ -1,25 +1,27 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Label } from "@/components/ui/label"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { ErrorMessage } from "@/components/ui/error-message"
+import { User } from "lucide-react"
 
 export default function CompleteProfilePage() {
   const { data: session, update } = useSession()
+  const router = useRouter()
   const [formData, setFormData] = useState({
-    firstName: session?.user.firstName || "",
-    lastName: session?.user.lastName || "",
+    firstName: "",
+    lastName: "",
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -39,47 +41,55 @@ export default function CompleteProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!validateForm()) {
-      return
-    }
+    if (!validateForm()) return
 
     setLoading(true)
+    setErrors({})
 
     try {
       const response = await fetch("/api/auth/complete-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+        }),
       })
 
       if (response.ok) {
-        await update({ profileCompleted: true })
+        // Update the session
+        await update({
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          profileCompleted: true,
+        })
+
+        // Redirect to dashboard
         router.push("/dashboard")
       } else {
         const data = await response.json()
-        setErrors({ general: data.error || "Failed to update profile" })
+        setErrors({ general: data.error || "Failed to complete profile" })
       }
     } catch (error) {
-      setErrors({ general: "Something went wrong" })
+      setErrors({ general: "Something went wrong. Please try again." })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Complete Your Profile</CardTitle>
-          <CardDescription>Please complete your profile information to continue</CardDescription>
+        <CardHeader className="text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+            <User className="h-6 w-6 text-primary" />
+          </div>
+          <CardTitle className="text-2xl">Complete Your Profile</CardTitle>
+          <CardDescription>Please provide your name to complete your account setup</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {errors.general && (
-              <Alert variant="destructive">
-                <AlertDescription>{errors.general}</AlertDescription>
-              </Alert>
-            )}
+            {errors.general && <ErrorMessage message={errors.general} />}
 
             <div>
               <Label htmlFor="firstName">First Name</Label>
@@ -89,6 +99,7 @@ export default function CompleteProfilePage() {
                 value={formData.firstName}
                 onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                 className={errors.firstName ? "border-destructive" : ""}
+                disabled={loading}
               />
               {errors.firstName && <p className="text-sm text-destructive mt-1">{errors.firstName}</p>}
             </div>
@@ -101,6 +112,7 @@ export default function CompleteProfilePage() {
                 value={formData.lastName}
                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                 className={errors.lastName ? "border-destructive" : ""}
+                disabled={loading}
               />
               {errors.lastName && <p className="text-sm text-destructive mt-1">{errors.lastName}</p>}
             </div>
@@ -109,7 +121,7 @@ export default function CompleteProfilePage() {
               {loading ? (
                 <>
                   <LoadingSpinner size="sm" className="mr-2" />
-                  Updating Profile...
+                  Completing Profile...
                 </>
               ) : (
                 "Complete Profile"

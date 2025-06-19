@@ -20,9 +20,10 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, Edit, Eye } from "lucide-react"
 import { hasPermission, PERMISSIONS } from "@/lib/permissions"
 import { generatePassword } from "@/lib/utils"
+import Link from "next/link"
 
 interface User {
   id: string
@@ -58,13 +59,14 @@ export default function UsersPage() {
   })
 
   const canManageUsers = hasPermission(session?.user.permissions || [], PERMISSIONS.MANAGE_USERS)
+  const canViewUsers = hasPermission(session?.user.permissions || [], PERMISSIONS.VIEW_USERS)
 
   useEffect(() => {
-    if (canManageUsers) {
+    if (canManageUsers || canViewUsers) {
       fetchUsers()
       fetchRoles()
     }
-  }, [canManageUsers])
+  }, [canManageUsers, canViewUsers])
 
   const fetchUsers = async () => {
     try {
@@ -134,12 +136,12 @@ export default function UsersPage() {
       user.email.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  if (!canManageUsers) {
+  if (!canManageUsers && !canViewUsers) {
     return (
       <MainLayout>
         <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
-          <p className="text-gray-600">You don't have permission to manage users.</p>
+          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+          <p className="text-muted-foreground">You don't have permission to view users.</p>
         </div>
       </MainLayout>
     )
@@ -149,68 +151,70 @@ export default function UsersPage() {
     <MainLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Users</h1>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add User
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New User</DialogTitle>
-                <DialogDescription>Add a new user to your organization</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
+          <h1 className="text-3xl font-bold">Users</h1>
+          {canManageUsers && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add User
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New User</DialogTitle>
+                  <DialogDescription>Add a new user to your organization</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input
+                        id="firstName"
+                        value={newUser.firstName}
+                        onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input
+                        id="lastName"
+                        value={newUser.lastName}
+                        onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
+                      />
+                    </div>
+                  </div>
                   <div>
-                    <Label htmlFor="firstName">First Name</Label>
+                    <Label htmlFor="email">Email</Label>
                     <Input
-                      id="firstName"
-                      value={newUser.firstName}
-                      onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
+                      id="email"
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      value={newUser.lastName}
-                      onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
-                    />
+                    <Label htmlFor="role">Role</Label>
+                    <Select value={newUser.roleId} onValueChange={(value) => setNewUser({ ...newUser, roleId: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id}>
+                            {role.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="role">Role</Label>
-                  <Select value={newUser.roleId} onValueChange={(value) => setNewUser({ ...newUser, roleId: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id}>
-                          {role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleCreateUser}>Create User</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button onClick={handleCreateUser}>Create User</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {/* Generated Credentials Dialog */}
@@ -277,22 +281,34 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={user.isActive}
-                          onCheckedChange={(checked) => toggleUserStatus(user.id, checked)}
-                        />
+                        {canManageUsers ? (
+                          <Switch
+                            checked={user.isActive}
+                            onCheckedChange={(checked) => toggleUserStatus(user.id, checked)}
+                          />
+                        ) : (
+                          <Badge variant={user.isActive ? "default" : "secondary"}>
+                            {user.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        )}
                         <span className="text-sm">{user.isActive ? "Active" : "Inactive"}</span>
                       </div>
                     </TableCell>
                     <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/users/${user.id}`}>
+                            <Eye className="h-4 w-4" />
+                          </Link>
                         </Button>
-                        <Button variant="ghost" size="sm">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {canManageUsers && (
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/users/${user.id}`}>
+                              <Edit className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -31,6 +31,11 @@ export default withAuth(
       return NextResponse.redirect(new URL("/dashboard", req.url))
     }
 
+    // Redirect root path to dashboard for authenticated users
+    if (pathname === "/" && token && token.profileCompleted && !token.mustChangePassword) {
+      return NextResponse.redirect(new URL("/dashboard", req.url))
+    }
+
     return NextResponse.next()
   },
   {
@@ -38,6 +43,10 @@ export default withAuth(
       authorized: ({ token, req }) => {
         // Allow access to auth pages without token
         if (req.nextUrl.pathname.startsWith("/auth/")) {
+          return true
+        }
+        // Allow root path
+        if (req.nextUrl.pathname === "/") {
           return true
         }
         // Require token for all other pages

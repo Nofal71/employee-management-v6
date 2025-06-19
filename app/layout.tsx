@@ -7,9 +7,9 @@ import { Providers } from "@/components/providers"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "ProjectHub - Project Management System",
+  title: "Project Management System",
   description: "Full-featured project management and analytics platform",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({

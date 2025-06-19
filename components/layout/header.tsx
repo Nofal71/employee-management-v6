@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react"
 import { useTheme } from "next-themes"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -18,6 +19,25 @@ import Link from "next/link"
 export function Header() {
   const { data: session } = useSession()
   const { theme, setTheme } = useTheme()
+  const [companyName, setCompanyName] = useState("Project Management")
+
+  useEffect(() => {
+    const fetchCompanyName = async () => {
+      try {
+        const response = await fetch("/api/company")
+        if (response.ok) {
+          const data = await response.json()
+          setCompanyName(data.name)
+        }
+      } catch (error) {
+        console.error("Failed to fetch company name:", error)
+      }
+    }
+
+    if (session) {
+      fetchCompanyName()
+    }
+  }, [session])
 
   if (!session) return null
 
@@ -30,8 +50,8 @@ export function Header() {
     <header className="bg-card border-b border-border px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center">
-          <Link href="/" className="font-bold text-lg">
-            Acme Corp
+          <Link href="/dashboard" className="font-bold text-lg">
+            {companyName}
           </Link>
         </div>
 
