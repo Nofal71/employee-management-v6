@@ -31,7 +31,7 @@ async function main() {
     })
   }
 
-  // Create company - using findFirst and create instead of upsert
+  // Create company
   console.log("🏢 Creating company...")
   let company = await prisma.company.findFirst({
     where: { name: "Acme Corporation" },
@@ -45,244 +45,304 @@ async function main() {
     })
   }
 
-  // Create roles
+  // Create roles with correct field names
   console.log("👥 Creating roles...")
-  const ownerRole = await prisma.role.upsert({
+
+  // Check if owner role exists
+  let ownerRole = await prisma.role.findFirst({
     where: {
-      name_companyId: {
-        name: "Owner",
-        companyId: company.id,
-      },
-    },
-    update: {},
-    create: {
       name: "Owner",
-      description: "Full system access",
       companyId: company.id,
-      permissions: {
-        connect: permissions.map((p) => ({ name: p.name })),
-      },
     },
   })
 
-  const employeeRole = await prisma.role.upsert({
-    where: {
-      name_companyId: {
-        name: "Employee",
+  if (!ownerRole) {
+    ownerRole = await prisma.role.create({
+      data: {
+        name: "Owner",
+        description: "Full system access",
         companyId: company.id,
       },
-    },
-    update: {},
-    create: {
+    })
+
+    // Connect permissions to owner role
+    await prisma.role.update({
+      where: { id: ownerRole.id },
+      data: {
+        permissions: {
+          connect: permissions.map((p) => ({ name: p.name })),
+        },
+      },
+    })
+  }
+
+  // Check if employee role exists
+  let employeeRole = await prisma.role.findFirst({
+    where: {
       name: "Employee",
-      description: "Basic employee access",
       companyId: company.id,
     },
   })
 
-  const teamLeadRole = await prisma.role.upsert({
-    where: {
-      name_companyId: {
-        name: "Team Lead",
+  if (!employeeRole) {
+    employeeRole = await prisma.role.create({
+      data: {
+        name: "Employee",
+        description: "Basic employee access",
         companyId: company.id,
       },
-    },
-    update: {},
-    create: {
+    })
+  }
+
+  // Check if team lead role exists
+  let teamLeadRole = await prisma.role.findFirst({
+    where: {
       name: "Team Lead",
-      description: "Can manage assigned teams",
       companyId: company.id,
-      permissions: {
-        connect: [{ name: "manage_assigned_teams" }, { name: "view_all_timesheets" }],
-      },
     },
   })
+
+  if (!teamLeadRole) {
+    teamLeadRole = await prisma.role.create({
+      data: {
+        name: "Team Lead",
+        description: "Can manage assigned teams",
+        companyId: company.id,
+      },
+    })
+
+    // Connect specific permissions to team lead role
+    await prisma.role.update({
+      where: { id: teamLeadRole.id },
+      data: {
+        permissions: {
+          connect: [{ name: "manage_assigned_teams" }, { name: "view_all_timesheets" }],
+        },
+      },
+    })
+  }
 
   // Create owner user
   console.log("👤 Creating owner user...")
   const hashedPassword = await bcrypt.hash("admin123", 12)
 
-  const owner = await prisma.user.upsert({
+  let owner = await prisma.user.findUnique({
     where: { email: "admin@acme.com" },
-    update: {},
-    create: {
-      email: "admin@acme.com",
-      firstName: "Admin",
-      lastName: "User",
-      password: hashedPassword,
-      isActive: true,
-      profileCompleted: true,
-      mustChangePassword: false,
-      companyId: company.id,
-      roleId: ownerRole.id,
-    },
   })
+
+  if (!owner) {
+    owner = await prisma.user.create({
+      data: {
+        email: "admin@acme.com",
+        firstName: "Admin",
+        lastName: "User",
+        password: hashedPassword,
+        isActive: true,
+        profileCompleted: true,
+        mustChangePassword: false,
+        companyId: company.id,
+        roleId: ownerRole.id,
+      },
+    })
+  }
 
   // Create sample employee
   console.log("👤 Creating sample employee...")
   const employeePassword = await bcrypt.hash("employee123", 12)
 
-  const employee = await prisma.user.upsert({
+  let employee = await prisma.user.findUnique({
     where: { email: "employee@acme.com" },
-    update: {},
-    create: {
-      email: "employee@acme.com",
-      firstName: "John",
-      lastName: "Doe",
-      password: employeePassword,
-      isActive: true,
-      profileCompleted: true,
-      mustChangePassword: false,
-      companyId: company.id,
-      roleId: employeeRole.id,
-    },
   })
+
+  if (!employee) {
+    employee = await prisma.user.create({
+      data: {
+        email: "employee@acme.com",
+        firstName: "John",
+        lastName: "Doe",
+        password: employeePassword,
+        isActive: true,
+        profileCompleted: true,
+        mustChangePassword: false,
+        companyId: company.id,
+        roleId: employeeRole.id,
+      },
+    })
+  }
 
   // Create sample team lead
   console.log("👤 Creating sample team lead...")
   const teamLeadPassword = await bcrypt.hash("teamlead123", 12)
 
-  const teamLead = await prisma.user.upsert({
+  let teamLead = await prisma.user.findUnique({
     where: { email: "teamlead@acme.com" },
-    update: {},
-    create: {
-      email: "teamlead@acme.com",
-      firstName: "Jane",
-      lastName: "Smith",
-      password: teamLeadPassword,
-      isActive: true,
-      profileCompleted: true,
-      mustChangePassword: false,
-      companyId: company.id,
-      roleId: teamLeadRole.id,
-    },
   })
+
+  if (!teamLead) {
+    teamLead = await prisma.user.create({
+      data: {
+        email: "teamlead@acme.com",
+        firstName: "Jane",
+        lastName: "Smith",
+        password: teamLeadPassword,
+        isActive: true,
+        profileCompleted: true,
+        mustChangePassword: false,
+        companyId: company.id,
+        roleId: teamLeadRole.id,
+      },
+    })
+  }
 
   // Create sample projects
   console.log("📁 Creating sample projects...")
-  const project1 = await prisma.project.upsert({
+  let project1 = await prisma.project.findFirst({
     where: {
-      name_companyId: {
-        name: "Website Redesign",
-        companyId: company.id,
-      },
-    },
-    update: {},
-    create: {
       name: "Website Redesign",
-      description: "Complete redesign of company website",
-      isActive: true,
       companyId: company.id,
     },
   })
 
-  const project2 = await prisma.project.upsert({
-    where: {
-      name_companyId: {
-        name: "Mobile App Development",
+  if (!project1) {
+    project1 = await prisma.project.create({
+      data: {
+        name: "Website Redesign",
+        description: "Complete redesign of company website",
+        isActive: true,
         companyId: company.id,
       },
-    },
-    update: {},
-    create: {
+    })
+  }
+
+  let project2 = await prisma.project.findFirst({
+    where: {
       name: "Mobile App Development",
-      description: "Develop mobile application for iOS and Android",
-      isActive: true,
       companyId: company.id,
     },
   })
+
+  if (!project2) {
+    project2 = await prisma.project.create({
+      data: {
+        name: "Mobile App Development",
+        description: "Develop mobile application for iOS and Android",
+        isActive: true,
+        companyId: company.id,
+      },
+    })
+  }
 
   // Create sample teams
   console.log("👥 Creating sample teams...")
-  const devTeam = await prisma.team.upsert({
+  let devTeam = await prisma.team.findFirst({
     where: {
-      name_companyId: {
-        name: "Development Team",
-        companyId: company.id,
-      },
-    },
-    update: {},
-    create: {
       name: "Development Team",
-      description: "Frontend and backend developers",
       companyId: company.id,
     },
   })
 
-  const qaTeam = await prisma.team.upsert({
-    where: {
-      name_companyId: {
-        name: "QA Team",
+  if (!devTeam) {
+    devTeam = await prisma.team.create({
+      data: {
+        name: "Development Team",
+        description: "Frontend and backend developers",
         companyId: company.id,
       },
-    },
-    update: {},
-    create: {
+    })
+  }
+
+  let qaTeam = await prisma.team.findFirst({
+    where: {
       name: "QA Team",
-      description: "Quality assurance and testing team",
       companyId: company.id,
     },
   })
+
+  if (!qaTeam) {
+    qaTeam = await prisma.team.create({
+      data: {
+        name: "QA Team",
+        description: "Quality assurance and testing team",
+        companyId: company.id,
+      },
+    })
+  }
 
   // Assign team members
   console.log("🔗 Assigning team members...")
-  await prisma.teamMember.upsert({
+  const existingDevMember = await prisma.teamMember.findUnique({
     where: {
       teamId_userId: {
         teamId: devTeam.id,
         userId: employee.id,
       },
     },
-    update: {},
-    create: {
-      teamId: devTeam.id,
-      userId: employee.id,
-    },
   })
 
-  await prisma.teamMember.upsert({
+  if (!existingDevMember) {
+    await prisma.teamMember.create({
+      data: {
+        teamId: devTeam.id,
+        userId: employee.id,
+      },
+    })
+  }
+
+  const existingQaMember = await prisma.teamMember.findUnique({
     where: {
       teamId_userId: {
         teamId: qaTeam.id,
         userId: teamLead.id,
       },
     },
-    update: {},
-    create: {
-      teamId: qaTeam.id,
-      userId: teamLead.id,
-    },
   })
+
+  if (!existingQaMember) {
+    await prisma.teamMember.create({
+      data: {
+        teamId: qaTeam.id,
+        userId: teamLead.id,
+      },
+    })
+  }
 
   // Assign projects to teams
   console.log("🔗 Assigning projects to teams...")
-  await prisma.teamProject.upsert({
+  const existingProject1Assignment = await prisma.teamProject.findUnique({
     where: {
       teamId_projectId: {
         teamId: devTeam.id,
         projectId: project1.id,
       },
     },
-    update: {},
-    create: {
-      teamId: devTeam.id,
-      projectId: project1.id,
-    },
   })
 
-  await prisma.teamProject.upsert({
+  if (!existingProject1Assignment) {
+    await prisma.teamProject.create({
+      data: {
+        teamId: devTeam.id,
+        projectId: project1.id,
+      },
+    })
+  }
+
+  const existingProject2Assignment = await prisma.teamProject.findUnique({
     where: {
       teamId_projectId: {
         teamId: devTeam.id,
         projectId: project2.id,
       },
     },
-    update: {},
-    create: {
-      teamId: devTeam.id,
-      projectId: project2.id,
-    },
   })
+
+  if (!existingProject2Assignment) {
+    await prisma.teamProject.create({
+      data: {
+        teamId: devTeam.id,
+        projectId: project2.id,
+      },
+    })
+  }
 
   console.log("✅ Database seeded successfully!")
   console.log("\n📋 Login credentials:")
